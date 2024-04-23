@@ -1,0 +1,1 @@
+sudo /home/zhf/miniconda3/envs/satellite/bin/python leo_or_chain_main.py

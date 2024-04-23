@@ -1,0 +1,68 @@
+default:
+    num_of_orbit: 1
+    sat_per_orbit: 11
+    network_ip_address: 10.134.149.124
+    update_queue_name: update_queue
+    ground_infos:
+      - ground1|0|0
+    calculation_interval: 5  # 每隔5s计算一次
+    speed_rate: 2  # 1s 相当于实际中的 2s
+    constellation_start_time: 2024|4|9|14|43|0
+    constellation_type: WALKER_STAR
+
+
+    max_generated_subnet: 1000
+    base_network_address: 192.168.0.0/16
+    satellite_image_name: satellite-node
+    ground_image_name: ground-station
+    number_of_satellites: 400
+    base_url: http://10.134.149.124:2375
+    listening_port: 30000
+
+    chain_image_name: chainmaker:v2.3.2
+    rabbitmq_image_name: rabbitmq:management
+    # -------------------------------------- 原来的配置 ------------------------------------------------
+    abs_of_prepare: /home/zhf/Projects/chain_maker/chainmaker-go/scripts/prepare.sh
+    abs_of_crypto_config: /home/zhf/Projects/chain_maker/chainmaker-go/build/crypto-config
+    abs_of_testdata: /home/zhf/Projects/chain_maker/chainmaker-go/tools/cmc/testdata
+    abs_of_chainconfig: /home/zhf/Projects/chain_maker/chainmaker-go/config/config_tpl/chainconfig
+    abs_of_build_config: /home/zhf/Projects/chain_maker/chainmaker-go/build/config
+    abs_of_multi_node: /home/zhf/Projects/chain_maker/chainmaker-go/scripts/docker/multi_node
+    abs_of_cmc_dir: /home/zhf/Projects/chain_maker/chainmaker-go/tools/cmc
+    abs_of_frr_configuration: /home/zhf/Projects/chain_maker/satellite-emulator/resources/frr
+    abs_of_routes_configuration: /home/zhf/Projects/chain_maker/satellite-emulator/resources/routes
+    abs_of_address_configuration: /home/zhf/Projects/chain_maker/satellite-emulator/resources/address
+    abs_of_lir_configuration: /home/zhf/Projects/chain_maker/satellite-emulator/resources/lir
+    abs_of_videos_storage: /home/zhf/Projects/chain_maker/satellite-emulator/resources/videos
+    # -------------------------------------- 原来的配置 ------------------------------------------------
+
+    # -------------------------------------- 现在的配置 ------------------------------------------------
+#    abs_of_prepare: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/scripts/prepare.sh
+#    abs_of_crypto_config: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/build/crypto-config
+#    abs_of_testdata: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/tools/cmc/testdata
+#    abs_of_chainconfig: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/config/config_tpl/chainconfig
+#    abs_of_build_config: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/build/config
+#    abs_of_multi_node: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/scripts/docker/multi_node
+#    abs_of_cmc_dir: /home/kernel-dbg/Projects/chain_maker/chainmaker-go/tools/cmc
+#    abs_of_frr_configuration: /root/Projects/satellite_emulator/resources/frr
+#    abs_of_routes_configuration: /root/Projects/satellite_emulator/resources/routes
+#    abs_of_address_configuration: /root/Projects/satellite_emulator/resources/address
+    # -------------------------------------- 现在的配置 ------------------------------------------------
+
+    # --------------------------------- 对于布隆过滤器的默认配置 ---------------------------------
+    default_bloom_filter_length: 32
+    default_hash_seed: 18
+    default_number_of_hash_funcs: 5
+    # --------------------------------- 对于布隆过滤器的默认配置 ---------------------------------
+
+
+    p2p_port: 11301
+    rpc_port: 12301
+
+    topology_cn_node: 4
+    generate_leo_or_chain: leo
+    start_frr: 1
+    lir_enabled: 1
+
+# micro seconds of lir: 6.594428921568627, micro seconds of ip: 10.921292079207921  3 * 22 236 routes
+# micro seconds of lir: 7.653705445544555, micro seconds of ip: 10.30028712871287 1 * 22 23 routes
