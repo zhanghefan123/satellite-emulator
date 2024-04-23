@@ -21,6 +21,7 @@ from docker_client import docker_client_http_impl as dchim
 from const_vars import const_vars as cvm
 from entities import constellation_type as ctm
 from command_client import command_client_unit as ccum
+from pyroute2 import IPRoute, NetNS
 
 
 class Constellation:
@@ -42,7 +43,7 @@ class Constellation:
             base_network_tmp=self.config_reader.base_network_address)  # 这是一个生成器，为了保证不发生重复，我们只能使用这一个生成器
         self.direction_graph = None  # networkx 产生的有向图
         self.docker_client = dchim.DockerClientHttpImpl(self.config_reader.base_url)  # 创建容器的对象
-        self.command_client = None   # 用来和容器进行 tcp 交互的
+        self.command_client = None  # 用来和容器进行 tcp 交互的
         self.set_command_client()
 
     def load_ground_stations(self):
@@ -209,21 +210,22 @@ class Constellation:
         进行地面站的异步生成
         :return:
         """
-        tasks = []
-        # 遍历每一个地面站
-        for index, ground_station in enumerate(self.ground_stations):
-            # 进行调用然后可以
-            node_name = f"{cvm.GROUND_STATION_PREFIX}{index}"
-            task = asyncio.create_task(
-                self.docker_client.create_container(image_name=self.config_reader.ground_image_name,
-                                                    container_name=node_name,
-                                                    container_index=index), )
-            tasks.append(task)
-        await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="create ground station process")
-        for single_task in tasks:
-            current_index, entity_container_id = single_task.result()
-            self.ground_stations[current_index].container_id = entity_container_id
-            self.id_to_groundstation_map[entity_container_id] = self.ground_stations[current_index]
+        if len(self.ground_stations) > 0:
+            tasks = []
+            # 遍历每一个地面站
+            for index, ground_station in enumerate(self.ground_stations):
+                # 进行调用然后可以
+                node_name = f"{cvm.GROUND_STATION_PREFIX}{index}"
+                task = asyncio.create_task(
+                    self.docker_client.create_container(image_name=self.config_reader.ground_image_name,
+                                                        container_name=node_name,
+                                                        container_index=index), )
+                tasks.append(task)
+            await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="create ground station process")
+            for single_task in tasks:
+                current_index, entity_container_id = single_task.result()
+                self.ground_stations[current_index].container_id = entity_container_id
+                self.id_to_groundstation_map[entity_container_id] = self.ground_stations[current_index]
 
     async def start_sky_nodes(self):
         tasks = []
@@ -235,13 +237,14 @@ class Constellation:
         await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="start sky nodes process")
 
     async def start_ground_stations(self):
-        tasks = []
-        ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
-        for container_id in ground_station_container_ids:
-            task = asyncio.create_task(
-                self.docker_client.start_container(container_id))
-            tasks.append(task)
-        await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="start ground_station process ")
+        if len(self.ground_stations) > 0:
+            tasks = []
+            ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
+            for container_id in ground_station_container_ids:
+                task = asyncio.create_task(
+                    self.docker_client.start_container(container_id))
+                tasks.append(task)
+            await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="start ground_station process ")
 
     def set_default_params_of_bloom_filter(self):
         if self.command_client:
@@ -262,13 +265,14 @@ class Constellation:
         await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="stop sky nodes process")
 
     async def stop_ground_stations(self):
-        tasks = []
-        ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
-        for container_id in ground_station_container_ids:
-            task = asyncio.create_task(
-                self.docker_client.stop_container(container_id))
-            tasks.append(task)
-        await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="stop ground stations process")
+        if len(self.ground_stations) > 0:
+            tasks = []
+            ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
+            for container_id in ground_station_container_ids:
+                task = asyncio.create_task(
+                    self.docker_client.stop_container(container_id))
+                tasks.append(task)
+            await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="stop ground stations process")
 
     async def remove_sky_nodes(self):
         tasks = []
@@ -279,12 +283,13 @@ class Constellation:
         await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="remove sky nodes process")
 
     async def remove_ground_stations(self):
-        tasks = []
-        ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
-        for container_id in ground_station_container_ids:
-            task = asyncio.create_task(self.docker_client.delete_container(container_id))
-            tasks.append(task)
-        await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="remove ground stations process")
+        if len(self.ground_stations) > 0:
+            tasks = []
+            ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
+            for container_id in ground_station_container_ids:
+                task = asyncio.create_task(self.docker_client.delete_container(container_id))
+                tasks.append(task)
+            await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="remove ground stations process")
 
     async def inspect_sky_nodes_with_container_id(self):
         satellite_container_ids = [satellite.container_id for satellite in self.satellites]
@@ -306,22 +311,23 @@ class Constellation:
             self.id_to_satellite_map[inspect_container_id].pid = inspect_container_pid
 
     async def inspect_ground_stations_with_container_id(self):
-        ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
-        tasks = []
-        for container_id in ground_station_container_ids:
-            task = asyncio.create_task(self.docker_client.inspect_container(container_id))
-            tasks.append(task)
-        await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="inspect ground stations process")
-        # 遍历所有已经完成的任务
-        for single_finished_task in tasks:
-            finished_task_result = single_finished_task.result()
-            inspect_container_id = finished_task_result["ID"]
-            inspect_container_addr = finished_task_result["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
-            inspect_container_name = finished_task_result["Name"].lstrip("/")
-            inspect_container_pid = finished_task_result["State"]["Pid"]
-            self.id_to_groundstation_map[inspect_container_id].addr_connect_to_docker_zero = inspect_container_addr
-            self.id_to_groundstation_map[inspect_container_id].container_name = inspect_container_name
-            self.id_to_groundstation_map[inspect_container_id].pid = inspect_container_pid
+        if len(self.ground_stations) > 0:
+            ground_station_container_ids = [ground_station.container_id for ground_station in self.ground_stations]
+            tasks = []
+            for container_id in ground_station_container_ids:
+                task = asyncio.create_task(self.docker_client.inspect_container(container_id))
+                tasks.append(task)
+            await pbm.ProgressBar.wait_tasks_with_tqdm(tasks, description="inspect ground stations process")
+            # 遍历所有已经完成的任务
+            for single_finished_task in tasks:
+                finished_task_result = single_finished_task.result()
+                inspect_container_id = finished_task_result["ID"]
+                inspect_container_addr = finished_task_result["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
+                inspect_container_name = finished_task_result["Name"].lstrip("/")
+                inspect_container_pid = finished_task_result["State"]["Pid"]
+                self.id_to_groundstation_map[inspect_container_id].addr_connect_to_docker_zero = inspect_container_addr
+                self.id_to_groundstation_map[inspect_container_id].container_name = inspect_container_name
+                self.id_to_groundstation_map[inspect_container_id].pid = inspect_container_pid
 
     def print_network_info(self):
         """
@@ -338,9 +344,9 @@ class Constellation:
         print(f"{top_and_bottom}")
 
     @staticmethod
-    def generate_veth_pair_for_single_link(inter_satellite_link, node_type):
+    def generate_veth_pair_for_single_link_with_bridge(inter_satellite_link, node_type):
         """
-        进行单条星间链路的生成
+        进行单条星间链路的生成 (带有 bridge)
         :param inter_satellite_link: 星间链路
         :param node_type: 节点类型
         :return:
@@ -367,34 +373,88 @@ class Constellation:
             bridge_interface_name_for_second_sat = f"vth{inter_satellite_link.dest_node.node_id}_{bridge_name}"
         else:
             raise ValueError("unsupported node type")
-        command_list = [
-            f"ip link add {first_veth_name} type veth peer name {second_veth_name}",  # 添加源到网桥
-            f"ip link set {first_veth_name} netns {first_sat_pid}",  # 设置命名空间
-            f"ip link set {second_veth_name} netns {second_sat_pid}",  # 设置命名空间
-            f"ip netns exec {first_sat_pid} ip link set {first_veth_name} up",  # 启动接口
-            f"ip netns exec {second_sat_pid} ip link set {second_veth_name} up",  # 启动接口
-            # f"ip link set {bridge_interface_name_for_first_sat} up",  # 启动接口
-            # f"ip link set {bridge_interface_name_for_second_sat} up",  # 启动接口
-            f"ip netns exec {first_sat_pid} ip addr add {first_sat_ip} dev {first_veth_name}",  # 执行命令添加 ip
-            f"ip netns exec {second_sat_pid} ip addr add {second_sat_ip} dev {second_veth_name}",  # 执行命令添加 ip
+        first_sat_net_namespace_path = f"/var/run/netns/{first_sat_pid}"
+        second_sat_net_namespace_path = f"/var/run/netns/{second_sat_pid}"
+        ip = IPRoute()
+        ip.link("add", ifname=bridge_name, kind="bridge")  # 创建网桥
+        ip.link("add", ifname=first_veth_name, peer=bridge_interface_name_for_first_sat, kind="veth")  # 创建从接口1到交换机的连接
+        ip.link("add", ifname=second_veth_name, peer=bridge_interface_name_for_second_sat, kind="veth")  # 创建从接口2到交换机的连接
+        bridge_index = ip.link_lookup(ifname=bridge_name)[0]  # 拿到网桥 index
+        first_veth_index = ip.link_lookup(ifname=first_veth_name)[0]  # 拿到接口1 index
+        second_veth_index = ip.link_lookup(ifname=second_veth_name)[0]   # 拿到接口2 index
+        bridge_interface_for_first_index = ip.link_lookup(ifname=bridge_interface_name_for_first_sat)[0]  # 拿到交换机接口1 index
+        bridge_interface_for_second_index = ip.link_lookup(ifname=bridge_interface_name_for_second_sat)[0]  # 拿到交换机接口2 index
+        ip.link("set", index=first_veth_index, net_ns_fd=first_sat_net_namespace_path)  # 设置网络命名空间
+        ip.link("set", index=second_veth_index, net_ns_fd=second_sat_net_namespace_path)  # 设置网络命名空间
+        ip.link("set", index=bridge_interface_for_first_index, master=bridge_index)  # 绑定接口到网桥
+        ip.link("set", index=bridge_interface_for_second_index, master=bridge_index)  # 绑定接口到网桥
+        ip.link("set", index=bridge_index, state="up")  # 启动网桥
+        ip.link("set", index=bridge_interface_for_first_index, state="up")
+        ip.link("set", index=bridge_interface_for_second_index, state="up")
+        with NetNS(first_sat_net_namespace_path) as ns:
+            idx = ns.link_lookup(ifname=first_veth_name)[0]
+            ns.addr("add", index=idx, address=first_sat_ip[:-3], prefixlen=30)
+            ns.link("set", index=idx, state="up")
+        with NetNS(second_sat_net_namespace_path) as ns:
+            idx = ns.link_lookup(ifname=second_veth_name)[0]
+            ns.addr("add", index=idx, address=second_sat_ip[:-3], prefixlen=30)
+            ns.link("set", index=idx, state="up")
+        ip.close()
 
-            # f"ip link add name {bridge_name} type bridge",  # 创建网桥
-            # f"ip link add {first_veth_name} type veth peer name {bridge_interface_name_for_first_sat}",  # 添加源到网桥
-            # f"ip link add {second_veth_name} type veth peer name {bridge_interface_name_for_second_sat}",  # 添加目的到网桥
-            # f"ip link set {first_veth_name} netns {first_sat_pid}",  # 设置命名空间
-            # f"ip link set {second_veth_name} netns {second_sat_pid}",  # 设置命名空间
-            # f"ip link set {bridge_interface_name_for_first_sat} master {bridge_name}",  # 将 veth 绑定到网桥
-            # f"ip link set {bridge_interface_name_for_second_sat} master {bridge_name}",  # 将 veth 绑定到网桥
-            # f"ip netns exec {first_sat_pid} ip link set {first_veth_name} up",  # 启动接口
-            # f"ip netns exec {second_sat_pid} ip link set {second_veth_name} up",  # 启动接口
-            # f"ip link set {bridge_name} up",  # 开启网桥
-            # f"ip link set {bridge_interface_name_for_first_sat} up",  # 启动接口
-            # f"ip link set {bridge_interface_name_for_second_sat} up",  # 启动接口
-            # f"ip netns exec {first_sat_pid} ip addr add {first_sat_ip} dev {first_veth_name}",  # 执行命令添加 ip
-            # f"ip netns exec {second_sat_pid} ip addr add {second_sat_ip} dev {second_veth_name}",  # 执行命令添加 ip
-        ]
-        for single_command in command_list:
-            os.system(single_command)
+    @staticmethod
+    def generate_veth_pair_for_single_link_without_bridge(inter_satellite_link, node_type):
+        """
+        进行单条星间链路的生成 (不带有 bridge)
+        :param inter_satellite_link: 星间链路
+        :param node_type: 节点类型
+        :return:
+        """
+        if node_type == em.EntityType.CONSENSUS_NODE:
+            first_veth_name = f"cn{inter_satellite_link.source_node.node_id}_index{inter_satellite_link.source_interface_index + 1}"
+            first_sat_pid = inter_satellite_link.source_node.pid
+            first_sat_ip = inter_satellite_link.source_interface_address
+            second_veth_name = f"cn{inter_satellite_link.dest_node.node_id}_index{inter_satellite_link.dest_interface_index + 1}"
+            second_sat_pid = inter_satellite_link.dest_node.pid
+            second_sat_ip = inter_satellite_link.dest_interface_address
+        elif node_type == em.EntityType.SATELLITE_NODE:
+            first_veth_name = f"sa{inter_satellite_link.source_node.node_id}_index{inter_satellite_link.source_interface_index + 1}"
+            first_sat_pid = inter_satellite_link.source_node.pid
+            first_sat_ip = inter_satellite_link.source_interface_address
+            second_veth_name = f"sa{inter_satellite_link.dest_node.node_id}_index{inter_satellite_link.dest_interface_index + 1}"
+            second_sat_pid = inter_satellite_link.dest_node.pid
+            second_sat_ip = inter_satellite_link.dest_interface_address
+        else:
+            raise ValueError("unsupported node type")
+        first_sat_net_namespace_path = f"/var/run/netns/{first_sat_pid}"
+        second_sat_net_namespace_path = f"/var/run/netns/{second_sat_pid}"
+        # 在宿主机的命名空间之中
+        ip = IPRoute()
+        ip.link("add", ifname=first_veth_name, peer=second_veth_name, kind="veth")
+        ip.link("set", index=ip.link_lookup(ifname=first_veth_name)[0], net_ns_fd=first_sat_net_namespace_path)
+        ip.link("set", index=ip.link_lookup(ifname=second_veth_name)[0], net_ns_fd=second_sat_net_namespace_path)
+        with NetNS(first_sat_net_namespace_path) as ns:
+            idx = ns.link_lookup(ifname=first_veth_name)[0]
+            ns.addr("add", index=idx, address=first_sat_ip[:-3], prefixlen=30)
+            ns.link("set", index=idx, state="up")
+        with NetNS(second_sat_net_namespace_path) as ns:
+            idx = ns.link_lookup(ifname=second_veth_name)[0]
+            ns.addr("add", index=idx, address=second_sat_ip[:-3], prefixlen=30)
+            ns.link("set", index=idx, state="up")
+        ip.close()
+
+    @staticmethod
+    def generate_veth_pair_for_single_link(inter_satellite_link, node_type, with_bridge):
+        """
+        进行单条星间链路的生成
+        :param inter_satellite_link: 星间链路
+        :param node_type: 节点类型
+        :param with_bridge: 是否生成带有 bridge 的
+        :return:
+        """
+        if with_bridge:
+            Constellation.generate_veth_pair_for_single_link_with_bridge(inter_satellite_link, node_type)
+        else:
+            Constellation.generate_veth_pair_for_single_link_without_bridge(inter_satellite_link, node_type)
 
     def generate_veth_pairs_for_all_links(self):
         """
@@ -403,9 +463,10 @@ class Constellation:
         """
         tasks = []
         args = []
+        with_bridge = self.config_reader.with_bridge
         for inter_satellite_link in self.satellite_links_without_direction:
             tasks.append(Constellation.generate_veth_pair_for_single_link)
-            args.append((inter_satellite_link, inter_satellite_link.source_node.entity_type,))
+            args.append((inter_satellite_link, inter_satellite_link.source_node.entity_type, with_bridge,))
         multithread_executor = mem.MultithreadExecutor(max_workers=50)
         multithread_executor.execute_with_multiple_thread(task_list=tasks, args_list=args,
                                                           description="generate veth pairs")
@@ -415,15 +476,22 @@ class Constellation:
         进行所有的桥的删除
         :return:
         """
-        command_list = []
-        args_list = []
-        for inter_satellite_link in self.satellite_links_without_direction:
-            command = f"ip link del {inter_satellite_link.bridge_name} type bridge"
-            command_list.append(mem.CommandExecutor.execute_command)
-            args_list.append((command,))
-        multithread_executor = mem.MultithreadExecutor(max_workers=50)
-        multithread_executor.execute_with_multiple_thread(task_list=command_list, args_list=args_list,
-                                                          description="delete bridges")
+        with_bridge = self.config_reader.with_bridge
+        if with_bridge:
+            # 需要进行删除
+            ip = IPRoute()
+            bar_format = '{desc}{percentage:3.0f}%|{bar}|{n_fmt}/{total_fmt}'
+            description = "delete bridges"
+            with tqdm.tqdm(total=len(self.satellite_links_without_direction), colour="green", ncols=97, postfix="", bar_format=bar_format) as pbar:
+                pbar.set_description(description)
+                for inter_satellite_link in self.satellite_links_without_direction:
+                    bridge_index = ip.link_lookup(ifname=inter_satellite_link.bridge_name)[0]
+                    ip.link("del", index=bridge_index)
+                    pbar.update(1)
+            ip.close()
+        else:
+            # 不需要进行删除
+            pass
 
     def generate_id_to_addresses_mapping(self):
         """

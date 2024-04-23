@@ -22,6 +22,7 @@ class ConfigReader:
         self.speed_rate = None            # 时间的倍率 1s 相当于实际的多少秒
         self.constellation_start_time = None  # 星座开始的时间 年|月|日|时|分|秒
         self.constellation_type = None
+        self.with_bridge = None  # 两个卫星相连的时候是否中间存在 bridge
 
         self.max_generated_subnet = None  # 最大生成子网数量
         self.base_network_address = None
@@ -84,10 +85,13 @@ class ConfigReader:
             self.network_ip_address = selected_config_data.get("network_ip_address", None)
             self.update_queue_name = selected_config_data.get("update_queue_name", None)
             self.ground_infos = selected_config_data.get("ground_infos", None)
+            if self.ground_infos[0] is None:
+                self.ground_infos = []
             self.calculation_interval = int(selected_config_data.get("calculation_interval", None))
             self.speed_rate = int(selected_config_data.get("speed_rate", None))
             self.constellation_start_time = selected_config_data.get("constellation_start_time", None)
             self.constellation_type = selected_config_data.get("constellation_type", None)
+            self.with_bridge = selected_config_data.get("with_bridge", None)
             self.resolve_constellation_start_time()
             self.resolve_constellation_type()
 
@@ -129,7 +133,7 @@ class ConfigReader:
             self.resolve_node_type_and_prefix()
 
             if not all([self.num_of_orbit, self.sat_per_orbit, self.network_ip_address,
-                        self.update_queue_name, self.ground_infos, self.calculation_interval, self.speed_rate,
+                        self.update_queue_name, self.calculation_interval, self.speed_rate,
                         self.constellation_start_time, self.constellation_type, self.node_type,
                         self.max_generated_subnet, self.base_network_address,
                         self.satellite_image_name, self.ground_image_name,
@@ -184,6 +188,7 @@ class ConfigReader:
         speed_rate: {self.speed_rate}
         constellation_start_time: {self.constellation_start_time}
         constellation_type: {self.constellation_type}
+        with_bridge: {self.with_bridge}
         
         max_generated_subnet: {self.max_generated_subnet}
         base_network_address: {self.base_network_address}

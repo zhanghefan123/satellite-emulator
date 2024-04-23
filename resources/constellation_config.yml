@@ -4,11 +4,12 @@ default:
     network_ip_address: 10.134.149.124
     update_queue_name: update_queue
     ground_infos:
-      - ground1|0|0
+      -
     calculation_interval: 5  # 每隔5s计算一次
     speed_rate: 2  # 1s 相当于实际中的 2s
     constellation_start_time: 2024|4|9|14|43|0
     constellation_type: WALKER_STAR
+    with_bridge: true
 
 
     max_generated_subnet: 1000
