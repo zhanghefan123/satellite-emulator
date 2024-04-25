@@ -31,33 +31,40 @@ class LirPacket:
         self.size_of_version_and_useless = 1
         self.size_of_protocol = 1
         self.size_of_id = 2
-        self.size_of_sequence_number = 2
         self.size_of_header_length = 2
         self.size_of_total_length = 2
         self.size_of_frag_off = 2
         self.size_of_check_sum = 2
-        self.size_of_option = 40
-        self.total_header_size = sum([self.size_of_version_and_useless, self.size_of_protocol, self.size_of_id,
-                                      self.size_of_sequence_number, self.size_of_header_length,
-                                      self.size_of_total_length, self.size_of_frag_off,
-                                      self.size_of_check_sum, self.size_of_option])
+        self.size_of_source = 2
+        self.size_of_destination = 2
+        self.size_of_option = 4
+        self.total_header_size = sum([self.size_of_version_and_useless,
+                                      self.size_of_protocol,
+                                      self.size_of_id,
+                                      self.size_of_header_length,
+                                      self.size_of_total_length,
+                                      self.size_of_frag_off,
+                                      self.size_of_check_sum,
+                                      self.size_of_source,
+                                      self.size_of_destination,
+                                      self.size_of_option])
         self.version_and_useless = None
         self.protocol = None
         self.id = None
-        self.sequence_number = None
         self.header_length = None
         self.total_length = None
         self.frag_off = None
         self.checksum = None
         self.option = None
+        self.source = None
+        self.destination = None
         self.udp_layer = UdpLayer()  # 等待进行填充
         self.app_layer = AppLayer()
 
     def fill_the_network_layer_fields(self, field_values):
-        (self.version_and_useless, self.protocol, self.id,
-         self.sequence_number, self.header_length,
+        (self.version_and_useless, self.protocol, self.id, self.header_length,
          self.total_length, self.frag_off,
-         self.checksum, *self.option) = field_values
+         self.checksum, self.source, self.destination, *self.option) = field_values
 
     def fill_the_udp_layer_fields(self, field_values):
         (self.udp_layer.source_port, self.udp_layer.destination_port,
@@ -72,12 +79,13 @@ class LirPacket:
 -------------------------------------------------------------------------- network layer  --------------------------------------------------------------------------
 version_and_useless: {self.version_and_useless} bytes: {self.size_of_version_and_useless},
 protocol: {self.protocol} bytes: {self.size_of_protocol},
-sequence_number: {self.sequence_number} bytes: {self.size_of_sequence_number}
 header_length: {self.header_length} bytes: {self.size_of_header_length}
 total_length: {self.total_length} bytes: {self.size_of_total_length}
 frag_off: {self.frag_off} bytes: {self.size_of_frag_off}
 check_sum: {self.checksum} bytes: {self.size_of_check_sum}
 option: {self.option} bytes: {self.size_of_option}
+source: {self.source} bytes: {self.size_of_source}
+destination: {self.destination} bytes: {self.size_of_destination}
 -------------------------------------------------------------------------- network layer  --------------------------------------------------------------------------
 ---------------------------------------------------------------------------- udp layer  ----------------------------------------------------------------------------
 source_port: {self.udp_layer.source_port} bytes: {self.udp_layer.size_of_source_port}
@@ -90,6 +98,12 @@ information: {self.app_layer.information} bytes: {self.app_layer.length_in_bytes
 ---------------------------------------------------------------------------- app layer  ----------------------------------------------------------------------------
         """
         return result
+
+
+class ICING:
+    def __init__(self):
+        self.size_of_single_hop = 42
+        self.icing_part = None
 
 
 class PcapAnalyzer:
@@ -119,13 +133,17 @@ class PcapAnalyzer:
         进行 lir_packet 的分析
         """
         analyzed_lir_packet = LirPacket()
-        result_of_lir_layer = struct.unpack(">2b6H40b", lir_packet_in_bytes[:analyzed_lir_packet.total_header_size])
+        result_of_lir_layer = struct.unpack(">2b7H4b", lir_packet_in_bytes[:analyzed_lir_packet.total_header_size])
         analyzed_lir_packet.fill_the_network_layer_fields(result_of_lir_layer)
-        udp_in_bytes = lir_packet_in_bytes[
-                       analyzed_lir_packet.total_header_size: (analyzed_lir_packet.total_header_size + 8)]
+        print(lir_packet_in_bytes[:analyzed_lir_packet.total_header_size])
+        print(analyzed_lir_packet.total_header_size)
+        icing = lir_packet_in_bytes[analyzed_lir_packet.total_header_size: (analyzed_lir_packet.total_header_size + 126)]
+        print(icing)
+        udp_in_bytes = lir_packet_in_bytes[analyzed_lir_packet.total_header_size + 126: (analyzed_lir_packet.total_header_size + 134)]
         result_of_udp_layer = struct.unpack(">HHHH", udp_in_bytes)
         analyzed_lir_packet.fill_the_udp_layer_fields(result_of_udp_layer)
-        app_in_bytes = lir_packet_in_bytes[(analyzed_lir_packet.total_header_size + 8):]
+        app_in_bytes = lir_packet_in_bytes[(analyzed_lir_packet.total_header_size + 134):]
+        print(app_in_bytes)
         analyzed_lir_packet.fill_the_app_layer(app_in_bytes)
         print(analyzed_lir_packet)
 
